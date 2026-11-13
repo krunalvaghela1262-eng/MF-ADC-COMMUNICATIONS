@@ -106,11 +106,11 @@ def make_folding_gif():
 
     fig = plt.figure(figsize=(11, 5.2), dpi=80)
     gs = fig.add_gridspec(2, 3, width_ratios=[1, 0.08, 2.4], hspace=0.45, wspace=0.05,
-                          left=0.06, right=0.98, top=0.88, bottom=0.11)
+                          left=0.085, right=0.98, top=0.88, bottom=0.11)
     axT = fig.add_subplot(gs[:, 0])
     ax1 = fig.add_subplot(gs[0, 2])
     ax2 = fig.add_subplot(gs[1, 2], sharex=ax1)
-    fig.suptitle(r"A modulo-ADC folds a high-amplitude signal into $[-\lambda,\lambda)$ before sampling",
+    fig.suptitle("A modulo-ADC wraps a large signal back into ±λ before sampling",
                  fontsize=14, weight="bold", color=INK)
 
     # transfer curve
@@ -124,9 +124,9 @@ def make_folding_gif():
     axT.set_ylim(-11, 11)
     axT.set_aspect("equal")
     axT.axhspan(-lam, lam, color=RED, alpha=0.07)
-    axT.set_xlabel("input  x")
-    axT.set_ylabel(r"output  $\mathcal{M}_\lambda(x)$")
-    axT.set_title("transfer function")
+    axT.set_xlabel("input")
+    axT.set_ylabel("output after folding")
+    axT.set_title("folding rule")
     style(axT)
     dotT, = axT.plot([], [], "o", color=INK, ms=8, zorder=5)
     guideT, = axT.plot([], [], color=INK, lw=0.8, ls=":")
@@ -139,10 +139,9 @@ def make_folding_gif():
     ax1.set_ylim(-11.5, 11.5)
     ax2.set_ylim(-2.6 * lam / 2, 2.6 * lam / 2)
     ax1.set_xlim(t[0], t[-1])
-    ax1.set_title(r"received signal $r(t)$  (needs a high-dynamic-range ADC)", loc="left")
-    ax2.set_title(r"folded signal $\mathcal{M}_\lambda(r(t))$ + samples at OF$\times$Nyquist (few bits suffice)",
-                  loc="left")
-    ax2.set_xlabel("time  (units of Nyquist period T = 0.5)")
+    ax1.set_title("received signal  (an ordinary ADC would need a huge range)", loc="left")
+    ax2.set_title("after folding into ±λ, with the ADC samples  (a few bits are enough)", loc="left")
+    ax2.set_xlabel("time")
     ax1.plot(t, x, color=BLUE, lw=1, alpha=0.18)
     l1, = ax1.plot([], [], color=BLUE, lw=2)
     l2 = [ax2.plot([], [], color=RED, lw=2)[0] for _ in range(40)]
@@ -209,10 +208,9 @@ def make_wrap_cancellation():
     fig, axs = plt.subplots(1, 3, figsize=(15, 4.2), dpi=110, sharey=True)
     fig.subplots_adjust(left=0.05, right=0.99, top=0.80, bottom=0.14, wspace=0.08)
     panels = [
-        (yl, INK, r"folded samples $\mathbf{y}_\lambda$ (4-bit modulo-ADC)", None),
-        (r_true, GREEN, r"residual for the TRUE symbols: $\mathcal{M}_\lambda(\mathbf{y}_\lambda-\mathbf{H}\mathbf{a})$",
-         d_true),
-        (r_wrong, RED, "residual for a WRONG candidate (1 of 4 symbols off)", d_wrong),
+        (yl, INK, "what the receiver sees: folded 4-bit samples", None),
+        (r_true, GREEN, "leftover when the guess is CORRECT", d_true),
+        (r_wrong, RED, "leftover when ONE of 4 symbols is wrong", d_wrong),
     ]
     for ax, (v, col, ttl, d) in zip(axs, panels):
         style(ax)
@@ -223,14 +221,14 @@ def make_wrap_cancellation():
         plt.setp(ml, color=col, ms=4)
         plt.setp(sl, color=col, lw=1.2)
         ax.set_title(ttl, fontsize=11, loc="left")
-        ax.set_xlabel("time / T")
+        ax.set_xlabel("time (symbol periods)")
         ax.set_ylim(-1.35, 1.35)
         if d is not None:
-            ax.text(0.98, 0.95, f"Mahalanobis distance = {d:,.0f}", transform=ax.transAxes, ha="right",
+            ax.text(0.98, 0.95, f"noise score = {d:,.0f}", transform=ax.transAxes, ha="right",
                     va="top", fontsize=11, weight="bold", color=col,
                     bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=col, lw=1))
     axs[0].set_ylabel("amplitude")
-    fig.suptitle("Wrap cancellation: the unknown folds vanish for the correct hypothesis, so no unfolding is needed",
+    fig.suptitle("Wrap cancellation: with the right guess the folds cancel, leaving only small noise (low score)",
                  fontsize=13, weight="bold", color=INK)
     fig.savefig(OUT / "wrap_cancellation.png", facecolor="white")
     plt.close(fig)
@@ -257,9 +255,9 @@ def make_block_search_gif():
         ax.set_ylim(-3.2, 2.6)
         ax.axis("off")
         wrong = wrong_by_pass[pass_k + (1 if merged else 0)]
-        title = (f"Algorithm 1 · pass {pass_k + 1}: block {blk + 1}/{len(starts)}  "
+        title = (f"Block search · pass {pass_k + 1} · block {blk + 1} of {len(starts)}  "
                  "(blocks are independent, so they run in parallel)") if not merged else \
-            (f"Algorithm 1 · pass {pass_k + 1}: merge committed cores"
+            (f"Block search · pass {pass_k + 1}: combine the middle symbols of all blocks"
              + ("  ✓ converged" if not wrong_by_pass[pass_k + 1] else ""))
         ax.set_title(title, fontsize=13, weight="bold", color=INK, loc="left")
 
@@ -268,7 +266,7 @@ def make_block_search_gif():
             ax.add_patch(FancyBboxPatch((i + 0.08, 0), 0.84, 0.9, boxstyle="round,pad=0.02,rounding_size=0.12",
                                         fc=col, ec="white", alpha=0.85))
             ax.text(i + 0.5, 0.45, rf"$a_{{{i + 1}}}$", ha="center", va="center", color="white", fontsize=11)
-        ax.text(-0.5, 1.25, "current estimate  â", fontsize=10, color=INK)
+        ax.text(-0.5, 1.25, "current guess of each symbol", fontsize=10, color=INK)
 
         for j, (fc, al, lab) in enumerate(((GREEN, 0.85, "correct"), (RED, 0.85, "wrong"),
                                            (GREY, 0.30, "block edge (discarded)"))):
@@ -278,7 +276,7 @@ def make_block_search_gif():
 
         ts = np.linspace(0, Ns, Ns * 6 + 1)
         ax.plot(ts, np.full_like(ts, -2.2), "|", color=GREY, ms=7)
-        ax.text(-0.5, -2.85, r"folded samples $\mathbf{y}_\lambda$  (OF = 6)", fontsize=10, color=INK)
+        ax.text(-0.5, -2.85, "folded samples (6 per symbol)", fontsize=10, color=INK)
 
         if not merged:
             s = starts[blk]
@@ -286,16 +284,16 @@ def make_block_search_gif():
             for g in list(range(s, s + G)) + list(range(s + Nb - G, s + Nb)):
                 if not ((s == 0 and g < G) or (s == Ns - Nb and g >= Ns - G)):
                     ax.add_patch(Rectangle((g + 0.08, 0), 0.84, 0.9, fc="white", alpha=0.55, ec="none"))
-            ax.text(s + Nb / 2, 1.45, f"search {8 ** Nb:,} local candidates", ha="center", color=BLUE,
+            ax.text(s + Nb / 2, 1.45, f"try all {8 ** Nb:,} options", ha="center", color=BLUE,
                     fontsize=10, weight="bold")
             eta = 0.75
             lo, hi = max(s - eta, 0), min(s + Nb + eta, Ns)
             ax.add_patch(Rectangle((lo, -2.55), hi - lo, 0.7, fc=BLUE, alpha=0.15, ec=BLUE, lw=1.5))
             ax.annotate("", xy=((lo + hi) / 2, -1.8), xytext=(s + Nb / 2, -0.3),
                         arrowprops=dict(arrowstyle="<-", color=BLUE, lw=1.5))
-            ax.text(hi + 0.15, -1.25, "window $\\mathcal{I}_j$ = block ± margin η\n"
-                                       "interference of symbols outside\nthe block removed using pass k−1",
-                    fontsize=9, color=INK, va="center")
+            ax.text(Ns + 0.5, -2.85, "samples used = the block plus a small margin;  "
+                                     "other symbols' effect removed using the current guess",
+                    fontsize=9, color=BLUE, ha="right")
 
     frames = []
     for k in range(len(wrong_by_pass) - 1):
