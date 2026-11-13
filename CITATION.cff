@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the paper below."
+title: "Fold First, Detect Directly: Communication Symbol Detection Without Unfolding for Low-Bitrate Modulo-ADCs"
+authors:
+  - family-names: Vaghela
+    given-names: Krunal
+  - family-names: Appaiah
+    given-names: Kumar
+  - family-names: Mulleti
+    given-names: Satish
+license: MIT
+preferred-citation:
+  type: article
+  title: "Fold First, Detect Directly: Communication Symbol Detection Without Unfolding for Low-Bitrate Modulo-ADCs"
+  authors:
+    - family-names: Vaghela
+      given-names: Krunal
+    - family-names: Appaiah
+      given-names: Kumar
+    - family-names: Mulleti
+      given-names: Satish
+  year: 2026
+  identifiers:
+    - type: other
+      value: "arXiv:2609.11298"
+  url: "https://arxiv.org/abs/2609.11298"
