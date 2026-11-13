@@ -17,14 +17,14 @@
 
 ---
 
-> **TL;DR.** A *modulo-ADC* folds a large signal into a small range $[-\lambda,\lambda)$ so that a cheap, few-bit ADC can sample it without clipping. Usually the folds must be undone ("unfolding") before anything else can happen, which is fragile and needs heavy oversampling. For a communication receiver the goal is the **symbols**, not the waveform. This work detects the symbols **directly from the folded samples**: an exact maximum-likelihood rule that never unfolds, plus a block search whose cost grows **linearly** with sequence length.
+> **TL;DR.** A *modulo-ADC* folds a large signal back into a small range, ±λ, so that a cheap ADC with only a few bits can sample it without clipping. Normally the folds must be undone first ("unfolding"), which is fragile and needs heavy oversampling. A communication receiver only needs the **symbols**, not the waveform. This work detects the symbols **directly from the folded samples**, with an exact maximum-likelihood rule that never unfolds, plus a block search whose cost grows only **linearly** with the number of symbols.
 
 | | |
 |---|---|
-| **Problem** | Detect PAM symbols from oversampled, folded and coarsely quantized samples $\mathbf{y}_\lambda = \mathcal{M}_\lambda(\mathbf{H}\mathbf{a}+\mathbf{w})+\mathbf{q}$ |
-| **Key idea** | *Wrap cancellation*: for the correct hypothesis the unknown fold integers drop out, which leaves a single Mahalanobis distance on the wrapped residual |
-| **Scaling** | Block-decomposed search (Algorithm 1): $\mathcal{O}(N_s)$ instead of $\mathcal{O}(\lvert\mathcal{S}\rvert^{N_s})$ |
-| **Outcome** | Outperforms the ITER-SIS, B2R2 and CBHF unfolding baselines and approaches an unclipped high-resolution ADC. Details are in the [paper](https://arxiv.org/abs/2609.11298) |
+| **Problem** | Recover the transmitted symbols when the receiver only sees *folded*, oversampled samples quantized with just 1–5 bits |
+| **Key idea** | *Wrap cancellation*: when you test the correct symbols, the unknown folds cancel out, leaving pure noise. So each candidate can be scored with a single noise-likelihood test, and nothing ever has to be unfolded |
+| **Scaling** | A block search (Algorithm 1) checks a few symbols at a time, so the cost grows linearly with sequence length instead of exponentially |
+| **Outcome** | Outperforms the ITER-SIS, B2R2 and CBHF unfolding methods and comes close to an ideal high-resolution ADC. Details are in the [paper](https://arxiv.org/abs/2609.11298) |
 
 ---
 
@@ -34,19 +34,19 @@
   <img src="docs/figures/modulo_folding.gif" alt="Animated modulo folding" width="95%">
 </p>
 
-The centred modulo operator
+Whenever the signal crosses +λ or −λ, the modulo-ADC wraps it around to the other side, like an odometer rolling over:
 
 ```math
-\mathcal{M}_\lambda(x) \;=\; \mathrm{mod}(x+\lambda,\;2\lambda)-\lambda \;\in\; [-\lambda,\lambda)
+\mathcal{M}_\lambda(x) \;=\; \mathrm{mod}(x+\lambda,\;2\lambda)-\lambda
 ```
 
-wraps the signal every time it crosses $\pm\lambda$. A signal with peak amplitude $c \gg \lambda$ (here $c/\lambda \approx 5$) is mapped into a narrow band, so a few-bit quantizer is enough. Equivalently $x = \mathcal{M}_\lambda(x) + 2\lambda z$ for an integer $z$. That integer is the information the folding "hides".
+A signal that swings up to ±11 (here λ = 2) ends up inside a narrow band, so a few-bit quantizer is enough. What gets lost is *how many times* each sample was wrapped. Classical receivers spend a lot of effort recovering that count. This work doesn't need it.
 
 ## 2 · Receiver pipeline
 
 <p align="center">
   <img src="docs/figures/receiver_pipeline.png" alt="Receiver pipeline (paper Fig. 1)" width="100%">
-  <br><sub><i>Fig. 1 of the paper: the low-pass filter output is folded, sampled at OF × Nyquist and quantized to 2<sup>R</sup> levels. The samples go <b>straight</b> to the detector.</i></sub>
+  <br><sub><i>Fig. 1 of the paper: the low-pass filtered signal is folded, sampled faster than Nyquist and quantized with a few bits. The samples go <b>straight</b> to the symbol detector.</i></sub>
 </p>
 
 ## 3 · The idea: skip the unfolding step
@@ -55,52 +55,48 @@ wraps the signal every time it crosses $\pm\lambda$. A signal with peak amplitud
 flowchart TB
     subgraph U["Conventional modulo receiver"]
         direction LR
-        A1["folded samples y_λ"] --> B1["UNFOLD waveform<br/>(ITER-SIS / B2R2 / CBHF)"]
-        B1 --> C1["re-quantize<br/>& slice"] --> D1["symbols â"]
-        B1 -. "needs high OF<br/>noise-sensitive<br/>errors propagate" .-> X1(("⚠"))
+        A1["Folded samples"] --> B1["Unfold the waveform<br/>(ITER-SIS, B2R2, CBHF)"]
+        B1 --> C1["Read off<br/>the symbols"] --> D1["Detected symbols"]
+        B1 -.-> X1["⚠ needs heavy oversampling,<br/>fails with coarse quantization"]
     end
     subgraph P["This work: fold first, detect directly"]
         direction LR
-        A2["folded samples y_λ"] --> B2["wrapped residual<br/>r(a) = M_λ(y_λ − H a)"]
-        B2 --> C2["Mahalanobis distance<br/>r(a)ᵀ Σ_T⁻¹ r(a)"] --> D2["argmin → symbols â"]
+        A2["Folded samples"] --> B2["For each candidate sequence:<br/>remove its expected signal,<br/>fold what is left"]
+        B2 --> C2["Score: does the leftover<br/>look like plain noise?"] --> D2["Best-scoring candidate<br/>= detected symbols"]
     end
     U ~~~ P
-    style B1 fill:#fde2e1,stroke:#d62728
-    style B2 fill:#e3f4e3,stroke:#2ca02c
-    style C2 fill:#e3f4e3,stroke:#2ca02c
+    classDef bad fill:#fde2e1,stroke:#d62728,color:#3b0d0c
+    classDef good fill:#e3f4e3,stroke:#2ca02c,color:#0e3b12
+    classDef plain fill:#f5f6f8,stroke:#8a8f98,color:#1d2330
+    classDef warn fill:#fff4dc,stroke:#e0a100,color:#3d2c00
+    class B1 bad
+    class B2,C2 good
+    class A1,C1,D1,A2,D2 plain
+    class X1 warn
 ```
 
-**Why it works: wrap cancellation.** Write $\mathbf{y}_\lambda = \mathbf{H}\mathbf{a} + \mathbf{w} + 2\lambda\mathbf{z} + \mathbf{q}$. For the *true* symbols,
+**Why it works: wrap cancellation.** Suppose you guess the symbols correctly and subtract the signal they would produce. What remains is the noise *plus some unknown number of full wraps*. Folding that leftover once more removes every full wrap, because adding exactly one wrap (2λ) changes nothing after folding:
 
 ```math
-\mathbf{r}(\mathbf{a}) \;=\; \mathcal{M}_\lambda(\mathbf{y}_\lambda-\mathbf{H}\mathbf{a})
-\;=\; \mathcal{M}_\lambda(\mathbf{w}+\mathbf{q}+2\lambda\mathbf{z})
-\;=\; \mathcal{M}_\lambda(\mathbf{w}+\mathbf{q})
-\;\approx\; \mathbf{w}+\mathbf{q},
+\text{fold}\big(\,\text{samples} - \text{signal of the correct symbols}\,\big) \;=\; \text{fold}\big(\,\text{noise} + \text{whole wraps}\,\big) \;=\; \text{noise}
 ```
 
-because $2\lambda\mathbb{Z}^N$ is the kernel of $\mathcal{M}_\lambda$ and the noise rarely exceeds $\lambda$. The unknown folds $\mathbf{z}$ vanish exactly, so the likelihood collapses to a single Gaussian term and the ML detector becomes
+So for the right guess the leftover is just small, smooth noise. For a wrong guess it is large and erratic. The detector picks the candidate whose leftover looks most like the receiver noise, using a Mahalanobis distance, which accounts for the noise being correlated between neighbouring samples:
 
 ```math
-\hat{\mathbf{a}} \;=\; \arg\min_{\mathbf{a}\in\mathcal{S}^{N_s}}\; \mathbf{r}(\mathbf{a})^{\top}\,\boldsymbol{\Sigma}_T^{-1}\,\mathbf{r}(\mathbf{a}),
-\qquad \boldsymbol{\Sigma}_T = \boldsymbol{\Sigma}_w + \sigma_q^2\mathbf{I}.
+\hat{\mathbf{a}} \;=\; \arg\min_{\mathbf{a}} \; \mathbf{r}(\mathbf{a})^{\top}\,\boldsymbol{\Sigma}^{-1}\,\mathbf{r}(\mathbf{a}),
+\qquad \mathbf{r}(\mathbf{a}) = \text{folded leftover for candidate } \mathbf{a}
 ```
 
 <p align="center">
   <img src="docs/figures/wrap_cancellation.png" alt="Wrap cancellation illustration" width="100%">
 </p>
 
-The covariance $\boldsymbol{\Sigma}_T$ is not a guess. The paper derives the exact autocorrelation of *folded* Gaussian noise from a Fourier series of the sawtooth and the bivariate characteristic function,
-
-```math
-R_Y(\tau)=\sum_{m\ge 0}A_{2m+1}\,\rho(\tau)^{2m+1},\qquad \rho(\tau)=\mathrm{sinc}(2W\tau),
-```
-
-and shows that the uniform quantization noise only inflates the diagonal, to second order (Appendices A and B).
+The noise covariance Σ isn't a guess. The paper derives exactly how folding changes the noise statistics, using a Fourier series of the folding function, and shows that the quantization error simply adds a small constant to the diagonal (Appendices A and B).
 
 ## 4 · Scaling to long sequences: block search (Algorithm 1)
 
-Exhaustive search over $N_s = 64$ symbols from an 8-ary alphabet means $8^{64}\approx 6\times10^{57}$ hypotheses. Sinc pulses decay as $1/|t|$ and the noise correlation dies out, so the sequence can be split into overlapping blocks:
+Checking every possible sequence of 64 symbols from an 8-level alphabet means 8⁶⁴ ≈ 6 × 10⁵⁷ candidates, which is impossible. Two facts help. Each symbol's pulse fades quickly in time, and the noise correlation dies out too. So the sequence can be solved a few symbols at a time:
 
 <p align="center">
   <img src="docs/figures/block_search.gif" alt="Block search animation" width="95%">
@@ -108,115 +104,109 @@ Exhaustive search over $N_s = 64$ symbols from an 8-ary alphabet means $8^{64}\a
 
 ```mermaid
 flowchart TD
-    I["initial estimate â⁽⁰⁾<br/>(sample nearest each Nyquist instant)"] --> P
-    subgraph P["pass k — every block j in parallel"]
-        D["interference from symbols outside block<br/>d_j = H(I_j,:) â⁽ᵏ⁻¹⁾ − H(I_j,C_j) â_j⁽ᵏ⁻¹⁾"] --> E["y_eff = y_λ(I_j) − d_j"]
-        E --> F["local MHBL search over S^Nb<br/>(8⁴ = 4096 candidates)"]
+    I["Rough first guess of every symbol<br/>(read the sample at each symbol's peak)"] --> P
+    subgraph P["One pass: every block works in parallel"]
+        direction TB
+        D["Take a block of 4 neighbouring symbols"] --> E["Remove the influence of all other symbols,<br/>using the current guess for them"]
+        E --> F["Try all 8⁴ = 4096 options for the block<br/>and keep the best-scoring one"]
     end
-    P --> M["discard edge symbols,<br/>merge block cores → â⁽ᵏ⁾"]
-    M --> C{"â⁽ᵏ⁾ = â⁽ᵏ⁻¹⁾ ?"}
-    C -- no --> P
-    C -- yes --> O["return â"]
+    P --> M["Keep each block's middle symbols,<br/>drop its edges (least reliable)"]
+    M --> C{"Did any symbol change?"}
+    C -- "yes: another pass" --> P
+    C -- "no" --> O["Done: detected sequence"]
+    classDef step fill:#e8f0fc,stroke:#1f5fbf,color:#0b1a33
+    classDef done fill:#e3f4e3,stroke:#2ca02c,color:#0e3b12
+    classDef ask fill:#fff4dc,stroke:#e0a100,color:#3d2c00
+    class I,D,E,F,M step
+    class O done
+    class C ask
 ```
 
-| | Exhaustive ML | Block search (Algorithm 1) |
+| | Check every sequence | Block search (Algorithm 1) |
 |---|---|---|
-| Cost | $\mathcal{O}(\mathrm{OF}^2 N_s^2\,\lvert\mathcal{S}\rvert^{N_s})$ | $\mathcal{O}(K\,P\,\mathrm{OF}^2(N_b+2\eta)^2\,\lvert\mathcal{S}\rvert^{N_b})$ |
-| Growth in $N_s$ | exponential | **linear** |
-| Parallel | no | yes, blocks are independent within a pass |
+| Candidates for 64 symbols | 8⁶⁴ ≈ 6 × 10⁵⁷ | a few thousand per block, a few dozen blocks |
+| Cost as the sequence gets longer | grows exponentially | grows **linearly** |
+| Can run in parallel? | no | yes, all blocks in a pass are independent |
 
 ---
 
 ## 5 · Code
 
-All simulations are in MATLAB. The code is organised so that **each step of the receiver is one function** with a descriptive name and a header that points to the matching equation in the paper.
+All simulations are in MATLAB. Each step of the receiver is **one function with a descriptive name**, and its header points to the matching equation in the paper.
 
 ```mermaid
 flowchart TD
-    SIG["<b>src/signal</b><br/>generate_pam_signal → bandlimited_noise<br/>→ observation_grid → sample_signal"]
-    ADC["<b>src/adc</b><br/>modulo_fold → quantize_modulo<br/>(quantize_full_range = reference ADC)"]
-    MOD["<b>src/model</b><br/>build_sinc_matrix · enumerate_sequences<br/>folded_noise_coefficients → noise_covariance"]
-    DET["<b>src/detectors</b><br/>mhbl_detect  (eq. 11)<br/>mhbl_block_detect  (Algorithm 1)<br/>conventional_detect"]
-    MET["<b>src/metrics</b><br/>symbol_error_rate · operating_point"]
-    EXP["<b>experiments/</b>  Monte Carlo<br/>mc_ser_vs_of · mc_block_search_long_sequence<br/>folded_noise_autocorrelation · demo_single_trial"]
-    SIG -->|"r = f + w, sampled at OF × Nyquist"| ADC
-    ADC -->|"folded samples y_λ"| DET
-    MOD -->|"H·A,  Σ_T"| DET
-    DET -->|"â"| MET
+    SIG["<b>src/signal</b><br/>build the transmitted signal,<br/>add channel noise, sample it"]
+    ADC["<b>src/adc</b><br/>fold into ±λ and quantize<br/>with a few bits"]
+    MOD["<b>src/model</b><br/>expected signal for each candidate,<br/>noise covariance after folding"]
+    DET["<b>src/detectors</b><br/>direct detection (exhaustive)<br/>block search (Algorithm 1)<br/>conventional-ADC reference"]
+    MET["<b>src/metrics</b><br/>symbol error rate"]
+    EXP["<b>experiments/</b><br/>Monte Carlo simulations, demo"]
+    SIG -->|"noisy samples"| ADC
+    ADC -->|"folded samples"| DET
+    MOD -->|"signal model + noise statistics"| DET
+    DET -->|"detected symbols"| MET
     MET --> EXP
-    style SIG fill:#e8f0fc,stroke:#1f5fbf
-    style ADC fill:#fde2e1,stroke:#d62728
-    style MOD fill:#f3ecfb,stroke:#7b3fbf
-    style DET fill:#e3f4e3,stroke:#2ca02c
-    style MET fill:#f4f4f4,stroke:#8a8f98
-    style EXP fill:#fff4dc,stroke:#e0a100
+    classDef sig fill:#e8f0fc,stroke:#1f5fbf,color:#0b1a33
+    classDef adc fill:#fde2e1,stroke:#d62728,color:#3b0d0c
+    classDef mod fill:#f3ecfb,stroke:#7b3fbf,color:#2a1145
+    classDef det fill:#e3f4e3,stroke:#2ca02c,color:#0e3b12
+    classDef met fill:#f5f6f8,stroke:#8a8f98,color:#1d2330
+    classDef exp fill:#fff4dc,stroke:#e0a100,color:#3d2c00
+    class SIG sig
+    class ADC adc
+    class MOD mod
+    class DET det
+    class MET met
+    class EXP exp
 ```
 
 <details open>
 <summary><b>What every file does</b></summary>
 
-| File | Role | Paper |
+| File | What it does | Paper |
 |---|---|---|
 | **`src/signal/`** | | |
-| `generate_pam_signal.m` | Sinc-pulse PAM signal $f(t)=\sum_m a_m\,\mathrm{sinc}(2W(t-t_m))$ on a dense time grid | §2 |
-| `symbol_times.m` | Pulse centres $t_m$, one Nyquist period apart | §2 |
-| `bandlimited_noise.m` | White noise → brick-wall LPF, giving correlated noise with $R_w(\tau)=\sigma_{\rm lpf}^2\,\mathrm{sinc}(2W\tau)$ | §2 |
-| `observation_grid.m` | ADC sampling instants at $F_s=\mathrm{OF}\cdot 2W$ inside the observation window | §2, Fig. 2 |
-| `sample_signal.m` | Uniform sampling of the dense-grid signal | §2 |
+| `generate_pam_signal.m` | Builds the transmitted signal: one sinc pulse per symbol, scaled by the symbol value | §2 |
+| `symbol_times.m` | Time at which each symbol's pulse peaks (one Nyquist period apart) | §2 |
+| `bandlimited_noise.m` | Channel noise after the receiver's low-pass filter (correlated between nearby samples) | §2 |
+| `observation_grid.m` | Times at which the ADC samples, at OF × the Nyquist rate | §2, Fig. 2 |
+| `sample_signal.m` | Takes the samples at those times | §2 |
 | **`src/adc/`** | | |
-| `modulo_fold.m` | Centred modulo $\mathcal{M}_\lambda(\cdot)$ | eq. 1–2 |
-| `quantize_modulo.m` | $R$-bit quantizer on $[-\lambda,\lambda)$, $\Delta = 2\lambda/2^R$ | §2 |
-| `quantize_full_range.m` | Conventional (unfolded) ADC used as the reference | §4 |
+| `modulo_fold.m` | The folding operation: wraps any value into ±λ | eq. 1–2 |
+| `quantize_modulo.m` | Few-bit quantizer for the folded range ±λ | §2 |
+| `quantize_full_range.m` | Ordinary ADC (no folding) covering the full signal range, used as the reference | §4 |
 | **`src/model/`** | | |
-| `build_sinc_matrix.m` | Interpolation matrix $[\mathbf{H}]_{n,m}=\mathrm{sinc}(2W(t_n-t_m))$ | §2 |
-| `enumerate_sequences.m` | All $\lvert\mathcal{S}\rvert^{N}$ candidate symbol vectors | §3 |
-| `folded_noise_coefficients.m` | Series coefficients $A_{2m+1}$ of the folded-noise autocorrelation (50-digit `vpa`) | App. A |
-| `noise_covariance.m` | $\boldsymbol{\Sigma}_T = \boldsymbol{\Sigma}_Y + \sigma_q^2\mathbf{I}$ | eq. 10, App. B |
-| `safe_cholesky.m` | Cholesky factor, so $\mathbf{r}^\top\boldsymbol{\Sigma}^{-1}\mathbf{r}=\lVert\mathbf{L}^{-1}\mathbf{r}\rVert^2$ is computed without an explicit inverse | – |
-| `injective_pam_alphabet.m` | 8-PAM alphabets that stay distinguishable after folding ($\lambda=1,2,3$) | §4 |
+| `build_sinc_matrix.m` | Maps symbols to noiseless samples: the expected signal for any candidate | §2 |
+| `enumerate_sequences.m` | Lists every possible candidate symbol sequence | §3 |
+| `folded_noise_coefficients.m` | Series coefficients describing how folding reshapes the noise correlation | App. A |
+| `noise_covariance.m` | Full noise covariance used for scoring: folded channel noise + quantization noise | eq. 10, App. B |
+| `safe_cholesky.m` | Numerically stable factorization, so the score never needs an explicit matrix inverse | – |
+| `injective_pam_alphabet.m` | 8-level symbol alphabets chosen so that no two symbols look the same after folding | §4 |
 | **`src/detectors/`** | | |
-| `mhbl_detect.m` | **Exhaustive Mahalanobis (MHBL) ML detector**, the core contribution | eq. 11 |
-| `build_block_info.m` | Precomputes blocks: index sets $\mathcal{I}_j,\mathcal{C}_j$, sub-matrices of $\mathbf{H}$, local Cholesky factors | §3.2 |
-| `mhbl_block_detect.m` | **Algorithm 1**: Jacobi (parallel) or Gauss–Seidel block search with cycle detection | §3.2, Alg. 1 |
-| `peak_init.m` | Initial estimate from the samples nearest each Nyquist instant | §3.2 |
-| `conventional_detect.m`, `conventional_block_detect.m` | Minimum-Euclidean receivers for the unclipped ADC reference | §4 |
+| `mhbl_detect.m` | **The proposed detector**: scores every candidate on its folded leftover and picks the best | eq. 11 |
+| `build_block_info.m` | Precomputes everything each block needs for the block search | §3.2 |
+| `mhbl_block_detect.m` | **Algorithm 1**: block search for long sequences (parallel or sequential updates) | §3.2 |
+| `peak_init.m` | Rough first guess from the sample at each symbol's peak | §3.2 |
+| `conventional_detect.m`, `conventional_block_detect.m` | Reference receiver using an ordinary high-resolution ADC | §4 |
 | **`src/metrics/`** | | |
-| `symbol_error_rate.m` | SER in % | §4 |
-| `operating_point.m` | Compression ratio $c/\lambda$ and pre-folding in-band SNR | §4 |
+| `symbol_error_rate.m` | Percentage of symbols detected wrongly | §4 |
+| `operating_point.m` | How strongly the signal is folded, and the signal-to-noise ratio | §4 |
 | **`experiments/`** | | |
 | `demo_single_trial.m` | One transmission end to end, with plots of every stage | – |
-| `mc_ser_vs_of.m` | Monte-Carlo SER vs oversampling factor: MHBL vs ablation ($\boldsymbol{\Sigma}=\mathbf{I}$) vs conventional ADC | §4 |
-| `mc_block_search_long_sequence.m` | Monte-Carlo SER and decode time for $N_s = 64$ with Algorithm 1 | §4 |
-| `folded_noise_autocorrelation.m` | Checks the Appendix-A series against simulated folded noise | App. A |
-| `tests/run_smoke_tests.m` | Fast end-to-end checks (modulo kernel, wrap cancellation, noiseless SER = 0, …) | – |
+| `mc_ser_vs_of.m` | Monte Carlo: error rate vs oversampling factor for the proposed detector and the reference ADC | §4 |
+| `mc_block_search_long_sequence.m` | Monte Carlo: 64-symbol sequences with the block search, error rate and decoding time | §4 |
+| `folded_noise_autocorrelation.m` | Checks the derived noise statistics against simulation | App. A |
+| `tests/run_smoke_tests.m` | Quick end-to-end checks of the whole pipeline (~1 minute) | – |
 | `docs/make_figures.py` | Regenerates every figure and animation in this README | – |
 
 </details>
-
-### Monte-Carlo loop (`mc_ser_vs_of.m`)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant OF as for each OF
-    participant Pre as precompute (once per OF)
-    participant MC as parfor trial = 1…N_MC
-    participant Rx as receivers
-    OF->>Pre: sample grid t_s, H·A, Σ_T → Cholesky L
-    loop Monte-Carlo trials
-        MC->>MC: draw a ∈ Sᴺˢ, build f(t), add LPF noise w(t), sample
-        MC->>Rx: fold + R-bit quantize → y_λ
-        Rx-->>MC: MHBL (Σ_T) · MHBL (Σ = I) · conventional ADC
-        MC->>MC: SER per receiver
-    end
-    MC-->>OF: mean SER(OF)
-```
 
 ---
 
 ## 6 · Quick start
 
-Requires **MATLAB R2022b or newer** with the **Signal Processing Toolbox** (`lowpass`, `xcorr`). The **Symbolic Math Toolbox** is optional (high-precision series coefficients) and so is the **Parallel Computing Toolbox** (`parfor`).
+Requires **MATLAB R2022b or newer** with the **Signal Processing Toolbox**. The **Symbolic Math Toolbox** (higher-precision noise coefficients) and the **Parallel Computing Toolbox** (faster Monte Carlo) are optional.
 
 ```matlab
 >> setup_paths                     % add src/ and experiments/ to the path
@@ -224,7 +214,7 @@ Requires **MATLAB R2022b or newer** with the **Signal Processing Toolbox** (`low
 >> demo_single_trial               % one transmission, step-by-step plots
 ```
 
-Every experiment is a function that takes an optional `cfg` struct, so any parameter can be changed without editing the file:
+Every experiment takes an optional settings struct, so any parameter can be changed without editing the file:
 
 ```matlab
 >> res = mc_ser_vs_of(struct('lambda', 2, 'OF_vec', [2 5 10], 'num_mc', 500));
@@ -232,18 +222,18 @@ Every experiment is a function that takes an optional `cfg` struct, so any param
 >> res = folded_noise_autocorrelation(struct('ratios', [4 3 2]));
 ```
 
-| Key parameter | Meaning | Default |
+| Setting | Meaning | Default |
 |---|---|---|
-| `lambda` | modulo threshold $\lambda$ | 1 |
-| `sigma_lpf` | in-band channel-noise std $\sigma_{\rm lpf}$ | $\lambda/3$ |
-| `OF_vec` | oversampling factors to sweep | 2 … 30 |
-| `R_mhbl` / `R_conv` | bits of the modulo-ADC / conventional ADC | 3 / 6 |
-| `NoS` | symbols per sequence $N_s$ | 4 (exhaustive), 64 (block) |
-| `num_mc` | Monte-Carlo trials per point (500 in the paper) | 100 |
+| `lambda` | folding threshold λ | 1 |
+| `sigma_lpf` | channel-noise level | λ / 3 |
+| `OF_vec` | oversampling factors to test | 2 … 30 |
+| `R_mhbl` / `R_conv` | bits of the modulo-ADC / of the ordinary ADC | 3 / 6 |
+| `NoS` | number of symbols per sequence | 4 (exhaustive), 64 (block search) |
+| `num_mc` | Monte Carlo trials per point (500 in the paper) | 100 |
 
 To regenerate the README figures: `python docs/make_figures.py` (numpy, matplotlib, pillow).
 
-> **Baselines.** The comparison algorithms (ITER-SIS, B2R2, CBHF) are other authors' methods and are not redistributed here. See their papers, [21]–[22] and [19] in the reference list.
+> **Baselines.** The comparison methods (ITER-SIS, B2R2, CBHF) were developed by other authors and are not redistributed here. See the reference list of the paper.
 
 ---
 
