@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://arxiv.org/abs/2609.11298"><img src="https://img.shields.io/badge/arXiv-2609.11298-b31b1b?logo=arxiv&logoColor=white" alt="arXiv"></a>
   <img src="https://img.shields.io/badge/ICASSP%202027-under%20review-1f5fbf" alt="ICASSP 2027 under review">
+  <a href="docs/BTP_presentation.pdf"><img src="https://img.shields.io/badge/slides-BTP%20presentation-f59e0b" alt="BTP slides"></a>
   <img src="https://img.shields.io/badge/MATLAB-R2025a-e16737?logo=mathworks&logoColor=white" alt="MATLAB">
   <img src="https://img.shields.io/badge/topic-modulo%20sampling%20%7C%20ML%20detection-444" alt="topic">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ca02c" alt="MIT license"></a>
@@ -199,6 +200,7 @@ flowchart TD
 | `folded_noise_autocorrelation.m` | Checks the derived noise statistics against simulation | App. A |
 | `tests/run_smoke_tests.m` | Quick end-to-end checks of the whole pipeline (~1 minute) | – |
 | `docs/make_figures.py` | Regenerates every figure and animation in this README | – |
+| `docs/BTP_presentation.pdf` | Bachelor's Thesis Project presentation (33 slides) | – |
 
 </details>
 
@@ -237,7 +239,16 @@ To regenerate the README figures: `python docs/make_figures.py` (numpy, matplotl
 
 ---
 
-## 7 · Citation
+## 7 · Slides
+
+The 33-slide presentation of this work as my **Bachelor's Thesis Project** at IIT Bombay (guides: Prof. Satish Mulleti and Prof. Kumar Appaiah). It tells the story in six questions: why a modulo-ADC, why not unfold, how to detect directly, how to scale to long sequences, how well it works, and what comes next (towards OFDM).
+
+<p align="center">
+  <a href="docs/BTP_presentation.pdf"><img src="docs/figures/slides_preview.png" alt="Four slides from the BTP presentation: title, wrap cancellation, block search, and the quantization-only result" width="90%"></a>
+  <br><sub>Click for the full deck (PDF).</sub>
+</p>
+
+## 8 · Citation
 
 ```bibtex
 @misc{vaghela2026foldfirst,
