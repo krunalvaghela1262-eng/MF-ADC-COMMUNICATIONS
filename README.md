@@ -200,7 +200,7 @@ flowchart TD
 | `folded_noise_autocorrelation.m` | Checks the derived noise statistics against simulation | App. A |
 | `tests/run_smoke_tests.m` | Quick end-to-end checks of the whole pipeline (~1 minute) | – |
 | `docs/make_figures.py` | Regenerates every figure and animation in this README | – |
-| `docs/BTP_presentation.pdf` | Bachelor's Thesis Project presentation (33 slides) | – |
+| `docs/BTP_presentation.pdf` | Bachelor's Thesis Project presentation (33 slides + 2 backup) | – |
 
 </details>
 
@@ -241,7 +241,7 @@ To regenerate the README figures: `python docs/make_figures.py` (numpy, matplotl
 
 ## 7 · Slides
 
-The 33-slide presentation of this work as my **Bachelor's Thesis Project** at IIT Bombay (guides: Prof. Satish Mulleti and Prof. Kumar Appaiah). It tells the story in six questions: why a modulo-ADC, why not unfold, how to detect directly, how to scale to long sequences, how well it works, and what comes next (towards OFDM).
+The 33-slide presentation (plus 2 backup slides) of this work as my **Bachelor's Thesis Project** at IIT Bombay (guides: Prof. Satish Mulleti and Prof. Kumar Appaiah). It tells the story in six questions: why a modulo-ADC, why not unfold, how to detect directly, how to scale to long sequences, how well it works, and what comes next (towards OFDM).
 
 <p align="center">
   <a href="docs/BTP_presentation.pdf"><img src="docs/figures/slides_preview.png" alt="Four slides from the BTP presentation: title, wrap cancellation, block search, and the quantization-only result" width="90%"></a>
